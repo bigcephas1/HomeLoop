@@ -1,0 +1,13 @@
+./*.jpeg
+./*.jpg
+
+
+./*jpeg
+./*jpg
+~ 
+*.jpg
+*.jpeg         
+
+node_modules
+backend/.env
+frontend/.env.local
