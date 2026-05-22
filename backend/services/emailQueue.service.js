@@ -1,40 +1,35 @@
-// import emailQueue from '../queues/email.queue.js';
+ import emailQueue from '../queues/email.queue.js';
 
-//export const queueEmail = async ({
- // to,
-  //subject,
-  //html,
-//}) => {
-  //console.log('📥 ADDING EMAIL JOB');
+export const queueEmail = async ({
+  to,
+  subject,
+  html,
+}) => {
+  console.log('📥 ADDING EMAIL JOB');
 
-  //const job = await emailQueue.add(
-    //'send-email',
-    //{
-   //   to,
-     // subject,
-     // html,
-   // },
-    //{
-      //attempts: 3,
+  const job = await emailQueue.add(
+    'send-email',
+    {
+      to,
+      subject,
+      html,
+    },
+    {
+      attempts: 3,
 
-      //backoff: {
-        //type: 'exponential',
-        //delay: 5000,
-      //},
+      backoff: {
+        type: 'exponential',
+        delay: 5000,
+      },
 
-      //removeOnComplete: true,
-   // },
-  //);
+      removeOnComplete: true,
+   },
+  );
 
-  //console.log('✅ EMAIL JOB ADDED:', job.id);
-//};
-//
-//
-//
-//
-import { sendEmail } from './email.service.js';
-
-export const queueEmail = async (data) => {
-  // TEMP: bypass Redis queue
-  return await sendEmail(data);
+  console.log('✅ EMAIL JOB ADDED:', job.id);
 };
+
+
+
+
+

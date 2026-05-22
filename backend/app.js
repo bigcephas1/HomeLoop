@@ -21,21 +21,6 @@ import errorMiddleware from './middleware/error.middleware.js';
 
 const app = express();
 
-import { sendEmail } from './services/email.service.js'; // adjust path
-
-app.get('/test-email', async (req, res) => {
-  try {
-    await sendEmail({
-      to: 'your-personal-email@gmail.com', // change to your real email
-      subject: 'Test from Render',
-      html: '<p>If you see this, SMTP works!</p>',
-    });
-    res.send('✅ Email sent successfully');
-  } catch (err) {
-    console.error('Test email error:', err);
-    res.status(500).send(`Error: ${err.message}`);
-  }
-});
 
 app.use(express.json());
 app.use(cookieParser());
