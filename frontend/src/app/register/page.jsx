@@ -161,6 +161,7 @@ export default function RegisterPage() {
           placeholder="Street Address"
           value={form.address}
           onChange={handleChange}
+	  required
           className="w-full p-2 border rounded"
         />
 
@@ -170,6 +171,7 @@ export default function RegisterPage() {
             placeholder="City"
             value={form.city}
             onChange={handleChange}
+	    required
             className="p-2 border rounded"
           />
 
@@ -178,6 +180,7 @@ export default function RegisterPage() {
             placeholder="State"
             value={form.state}
             onChange={handleChange}
+	    required
             className="p-2 border rounded"
           />
         </div>

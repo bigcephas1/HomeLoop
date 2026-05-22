@@ -171,6 +171,8 @@
 //   }
 // };
 
+
+
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
@@ -207,6 +209,7 @@ export const register = async (req, res) => {
       lastName,
       email,
       password,
+      confirmPassword,
       username,
       address,
       city,
@@ -225,25 +228,30 @@ export const register = async (req, res) => {
     if (!lastName?.trim()) missingFields.push('lastName');
     if (!email?.trim()) missingFields.push('email');
     if (!password?.trim()) missingFields.push('password');
+    if (!confirmPassword?.trim())
+      missingFields.push('confirmPassword');
     if (!username?.trim()) missingFields.push('username');
     if (!address?.trim()) missingFields.push('address');
     if (!city?.trim()) missingFields.push('city');
+    if (!state?.trim()) missingFields.push('state');
     if (!country?.trim()) missingFields.push('country');
-
-    /////////////////////////////////////////////////////
-    // OPTIONAL FIELDS
-    /////////////////////////////////////////////////////
-
-    // Remove the comments below if you want them required
-
-     if (!state?.trim()) missingFields.push('state');
-    // if (!postalCode?.trim()) missingFields.push('postalCode');
 
     if (missingFields.length > 0) {
       return res.status(400).json({
         success: false,
         message: 'Missing required fields',
         missingFields,
+      });
+    }
+
+    /////////////////////////////////////////////////////
+    // PASSWORD MATCH
+    /////////////////////////////////////////////////////
+
+    if (password !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Passwords do not match',
       });
     }
 
@@ -281,7 +289,9 @@ export const register = async (req, res) => {
     // CREATE EMAIL TOKEN
     /////////////////////////////////////////////////////
 
-    const emailToken = crypto.randomBytes(32).toString('hex');
+    const emailToken = crypto.randomBytes(32).toString(
+      'hex',
+    );
 
     /////////////////////////////////////////////////////
     // CREATE USER
@@ -296,7 +306,7 @@ export const register = async (req, res) => {
 
       address: address.trim(),
       city: city.trim(),
-      state: state?.trim() || '',
+      state: state.trim(),
       postalCode: postalCode?.trim() || '',
       country: country.trim(),
 
@@ -307,7 +317,8 @@ export const register = async (req, res) => {
         .update(emailToken)
         .digest('hex'),
 
-      emailVerificationExpire: Date.now() + 24 * 60 * 60 * 1000,
+      emailVerificationExpire:
+        Date.now() + 24 * 60 * 60 * 1000,
 
       loginHistory: [],
       refreshTokens: [],
@@ -327,7 +338,8 @@ export const register = async (req, res) => {
           <h2>Email Verification</h2>
 
           <p>
-            Thank you for registering. Click the button below to verify your account.
+            Thank you for registering.
+            Click the button below to verify your account.
           </p>
 
           <a
@@ -346,7 +358,8 @@ export const register = async (req, res) => {
           </a>
 
           <p style="margin-top:20px;">
-            If you did not create this account, you can safely ignore this email.
+            If you did not create this account,
+            you can safely ignore this email.
           </p>
         </div>
       `,
@@ -358,7 +371,8 @@ export const register = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'User created successfully. Verification email sent.',
+      message:
+        'User created successfully. Verification email sent.',
     });
   } catch (err) {
     console.error('REGISTER ERROR:', err);
@@ -366,7 +380,10 @@ export const register = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error',
-      error: process.env.NODE_ENV === 'development' ? err.message : undefined,
+      error:
+        process.env.NODE_ENV === 'development'
+          ? err.message
+          : undefined,
     });
   }
 };
@@ -384,7 +401,9 @@ export const verifyEmail = async (req, res) => {
 
     const user = await User.findOne({
       emailVerificationToken: hashed,
-      emailVerificationExpire: { $gt: Date.now() },
+      emailVerificationExpire: {
+        $gt: Date.now(),
+      },
     });
 
     if (!user) {
@@ -418,10 +437,11 @@ export const verifyEmail = async (req, res) => {
 
 export const login = async (req, res) => {
   try {
-    const { email, password, twoFactorCode } = req.body;
+    const { email, password, twoFactorCode } =
+      req.body;
 
     /////////////////////////////////////////////////////
-    // VALIDATE INPUTS
+    // VALIDATION
     /////////////////////////////////////////////////////
 
     if (!email || !password) {
@@ -450,7 +470,9 @@ export const login = async (req, res) => {
     // VERIFY PASSWORD
     /////////////////////////////////////////////////////
 
-    const isMatch = await user.comparePassword(password);
+    const isMatch = await user.comparePassword(
+      password,
+    );
 
     if (!isMatch) {
       return res.status(401).json({
@@ -466,7 +488,8 @@ export const login = async (req, res) => {
     if (!user.isEmailVerified) {
       return res.status(403).json({
         success: false,
-        message: 'Please verify your email before logging in',
+        message:
+          'Please verify your email before logging in',
       });
     }
 
@@ -503,7 +526,7 @@ export const login = async (req, res) => {
     });
 
     /////////////////////////////////////////////////////
-    // GENERATE TOKENS
+    // CREATE TOKENS
     /////////////////////////////////////////////////////
 
     const accessToken = signAccessToken(user);
@@ -570,6 +593,391 @@ export const login = async (req, res) => {
   } catch (err) {
     console.error('LOGIN ERROR:', err);
 
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+/////////////////////////////////////////////////////
+// REFRESH TOKEN
+/////////////////////////////////////////////////////
+
+export const refreshToken = async (req, res) => {
+  try {
+    const token = req.cookies.refreshToken;
+
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: 'No refresh token',
+      });
+    }
+
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_REFRESH_SECRET,
+    );
+
+    const user = await User.findById(decoded.id);
+
+    if (!user) {
+      return res.status(403).json({
+        success: false,
+        message: 'Invalid session',
+      });
+    }
+
+    const session = user.refreshTokens.find(
+      (t) => t.token === token,
+    );
+
+    if (!session) {
+      user.refreshTokens = [];
+
+      await user.save();
+
+      return res.status(403).json({
+        success: false,
+        message:
+          'Session compromised. All sessions cleared.',
+      });
+    }
+
+    /////////////////////////////////////////////////////
+    // ROTATE TOKENS
+    /////////////////////////////////////////////////////
+
+    user.refreshTokens = user.refreshTokens.filter(
+      (t) => t.token !== token,
+    );
+
+    const newAccessToken = signAccessToken(user);
+    const newRefreshToken = signRefreshToken(user);
+
+    user.refreshTokens.push({
+      token: newRefreshToken,
+      device: req.headers['user-agent'],
+      ip: req.ip,
+      createdAt: new Date(),
+      lastUsed: new Date(),
+    });
+
+    await user.save();
+
+    /////////////////////////////////////////////////////
+    // SET COOKIES
+    /////////////////////////////////////////////////////
+
+    res.cookie('accessToken', newAccessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 15 * 60 * 1000,
+    });
+
+    res.cookie('refreshToken', newRefreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    res.json({
+      success: true,
+      message: 'Token refreshed',
+    });
+  } catch (err) {
+    res.status(401).json({
+      success: false,
+      message: 'Invalid refresh token',
+    });
+  }
+};
+
+/////////////////////////////////////////////////////
+// GOOGLE AUTH
+/////////////////////////////////////////////////////
+
+export const googleAuth = async (req, res) => {
+  try {
+    const {
+      email,
+      firstName,
+      lastName,
+      googleId,
+      avatar,
+    } = req.body;
+
+    let user = await User.findOne({ email });
+
+    if (!user) {
+      user = await User.create({
+        email,
+        firstName,
+        lastName,
+        googleId,
+        username: email.split('@')[0],
+        avatar: avatar || '',
+        isEmailVerified: true,
+        loginHistory: [],
+        refreshTokens: [],
+      });
+    }
+
+    const accessToken = signAccessToken(user);
+    const refreshToken = signRefreshToken(user);
+
+    user.refreshTokens.push({
+      token: refreshToken,
+      device: req.headers['user-agent'],
+      ip: req.ip,
+      createdAt: new Date(),
+      lastUsed: new Date(),
+    });
+
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Google login successful',
+      accessToken,
+      refreshToken,
+      user,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+/////////////////////////////////////////////////////
+// ENABLE 2FA
+/////////////////////////////////////////////////////
+
+export const enable2FA = async (req, res) => {
+  try {
+    const user = await User.findById(
+      req.user.id,
+    ).select('+twoFactorSecret');
+
+    const secret = speakeasy.generateSecret({
+      name: `HomeLoop (${user.email})`,
+    });
+
+    user.twoFactorSecret = secret.base32;
+    user.twoFactorEnabled = true;
+
+    await user.save();
+
+    const qr = await qrcode.toDataURL(
+      secret.otpauth_url,
+    );
+
+    res.json({
+      success: true,
+      qr,
+      secret: secret.base32,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+/////////////////////////////////////////////////////
+// GET SESSIONS
+/////////////////////////////////////////////////////
+
+export const getSessions = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+
+    res.json({
+      success: true,
+      sessions: user.refreshTokens,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+/////////////////////////////////////////////////////
+// LOGOUT SESSION
+/////////////////////////////////////////////////////
+
+export const logoutSession = async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    await User.updateOne(
+      { _id: req.user.id },
+      { $pull: { refreshTokens: { token } } },
+    );
+
+    res.json({
+      success: true,
+      message: 'Session removed',
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+/////////////////////////////////////////////////////
+// LOGOUT
+/////////////////////////////////////////////////////
+
+export const logout = async (req, res) => {
+  try {
+    const token = req.cookies.refreshToken;
+
+    if (token) {
+      const user = await User.findOne({
+        'refreshTokens.token': token,
+      });
+
+      if (user) {
+        user.refreshTokens = user.refreshTokens.filter(
+          (t) => t.token !== token,
+        );
+
+        await user.save();
+      }
+    }
+
+    res.clearCookie('accessToken');
+    res.clearCookie('refreshToken');
+
+    res.json({
+      success: true,
+      message: 'Logged out successfully',
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+/////////////////////////////////////////////////////
+// FORGOT PASSWORD
+/////////////////////////////////////////////////////
+
+export const forgotPassword = async (req, res) => {
+  try {
+    const user = await User.findOne({
+      email: req.body.email,
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+      });
+    }
+
+    const resetToken = crypto.randomBytes(32).toString(
+      'hex',
+    );
+
+    user.resetPasswordToken = crypto
+      .createHash('sha256')
+      .update(resetToken)
+      .digest('hex');
+
+    user.resetPasswordExpire =
+      Date.now() + 60 * 60 * 1000;
+
+    await user.save({
+      validateBeforeSave: false,
+    });
+
+    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+
+    await queueEmail({
+      to: user.email,
+      subject: 'Password Reset',
+      html: `
+        <h2>Password Reset</h2>
+
+        <p>
+          Click the link below to reset your password:
+        </p>
+
+        <a href="${resetUrl}">
+          Reset Password
+        </a>
+      `,
+    });
+
+    res.json({
+      success: true,
+      message: 'Password reset email sent',
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+/////////////////////////////////////////////////////
+// RESET PASSWORD
+/////////////////////////////////////////////////////
+
+export const resetPassword = async (req, res) => {
+  try {
+    const hashedToken = crypto
+      .createHash('sha256')
+      .update(req.params.token)
+      .digest('hex');
+
+    const user = await User.findOne({
+      resetPasswordToken: hashedToken,
+      resetPasswordExpire: {
+        $gt: Date.now(),
+      },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired token',
+      });
+    }
+
+    user.password = req.body.password;
+
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+
+    /////////////////////////////////////////////////////
+    // INVALIDATE ALL SESSIONS
+    /////////////////////////////////////////////////////
+
+    user.refreshTokens = [];
+
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Password reset successful',
+    });
+  } catch (err) {
     res.status(500).json({
       success: false,
       message: err.message,
