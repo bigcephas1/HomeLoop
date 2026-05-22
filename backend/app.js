@@ -21,6 +21,22 @@ import errorMiddleware from './middleware/error.middleware.js';
 
 const app = express();
 
+import { sendEmail } from './services/email.service.js'; // adjust path
+
+app.get('/test-email', async (req, res) => {
+  try {
+    await sendEmail({
+      to: 'your-personal-email@gmail.com', // change to your real email
+      subject: 'Test from Render',
+      html: '<p>If you see this, SMTP works!</p>',
+    });
+    res.send('✅ Email sent successfully');
+  } catch (err) {
+    console.error('Test email error:', err);
+    res.status(500).send(`Error: ${err.message}`);
+  }
+});
+
 app.use(express.json());
 app.use(cookieParser());
 
@@ -38,14 +54,6 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/uploads', uploadRoutes);
-app.get('/test-email', async (req, res) => {
-  try {
-    await sendEmail({ to: 'ukpabipeter4@gmail.com@gmail.com', subject: 'Test', html: '<p>Test</p>' });
-    res.send('Email sent');
-  } catch (err) {
-    res.status(500).send(err.message);
-  }
-});
 
 app.get('/', (req, res) => {
   res.send('HomeLoop API Running...');
