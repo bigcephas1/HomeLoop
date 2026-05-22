@@ -38,7 +38,14 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/uploads', uploadRoutes);
-
+app.get('/test-email', async (req, res) => {
+  try {
+    await sendEmail({ to: 'ukpabipeter4@gmail.com@gmail.com', subject: 'Test', html: '<p>Test</p>' });
+    res.send('Email sent');
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
 
 app.get('/', (req, res) => {
   res.send('HomeLoop API Running...');
