@@ -1,79 +1,78 @@
-import nodemailer from 'nodemailer';
+/////////////  WORKING VERSION ///////////////////////////
 
-console.log(
-  'EMAIL_USER defined?',
-  !!process.env.EMAIL_USER,
-);
+// import nodemailer from 'nodemailer';
 
-console.log(
-  'EMAIL_PASS defined?',
-  !!process.env.EMAIL_PASS,
-);
+// console.log(
+//   'EMAIL_USER defined?',
+//   !!process.env.EMAIL_USER,
+// );
 
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
+// console.log(
+//   'EMAIL_PASS defined?',
+//   !!process.env.EMAIL_PASS,
+// );
 
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+// const transporter = nodemailer.createTransport({
+//   service: 'gmail',
 
-///////////////////////////////////////////////////
-///OPTIONAL SMTP CHECK
-///////////////////////////////////////////////////
+//   auth: {
+//     user: process.env.EMAIL_USER,
+//     pass: process.env.EMAIL_PASS,
+//   },
+// });
 
-transporter.verify((error, success) => {
-  if (error) {
-    console.error(
-      '❌ Nodemailer verification failed:',
-      error.message,
-    );
+// ///////////////////////////////////////////////////
+// ///OPTIONAL SMTP CHECK
+// ///////////////////////////////////////////////////
 
-   return;
-  }
+// transporter.verify((error, success) => {
+//   if (error) {
+//     console.error(
+//       '❌ Nodemailer verification failed:',
+//       error.message,
+//     );
 
-  console.log('✅ Nodemailer ready');
-});
+//    return;
+//   }
 
-///////////////////////////////////////////////////
-///SEND EMAIL
-///////////////////////////////////////////////////
+//   console.log('✅ Nodemailer ready');
+// });
 
-export const sendEmail = async ({
-  to,
-  subject,
-  html,
-}) => {
-  try {
-    console.log(`📧 Attempting to send email to ${to}`);
+// ///////////////////////////////////////////////////
+// ///SEND EMAIL
+// ///////////////////////////////////////////////////
 
-    const info = await transporter.sendMail({
-      from: `"HomeLoop" <${process.env.EMAIL_USER}>`,
-      to,
-      subject,
-      html,
-    });
+// export const sendEmail = async ({
+//   to,
+//   subject,
+//   html,
+// }) => {
+//   try {
+//     console.log(`📧 Attempting to send email to ${to}`);
 
-    console.log('✅ Email sent:', info.messageId);
+//     const info = await transporter.sendMail({
+//       from: `"HomeLoop" <${process.env.EMAIL_USER}>`,
+//       to,
+//       subject,
+//       html,
+//     });
 
-    return info;
-  } catch (error) {
-    console.error(
-     '❌ SEND EMAIL ERROR:',
-      error,
-    );
+//     console.log('✅ Email sent:', info.messageId);
 
-   throw error;
-  }
-};
+//     return info;
+//   } catch (error) {
+//     console.error(
+//      '❌ SEND EMAIL ERROR:',
+//       error,
+//     );
 
-
+//    throw error;
+//   }
+// };
 
 // import { Resend } from 'resend';
 
 // const resend = new Resend(process.env.RESEND_API_KEY);
-
 
 // export const sendEmail = async ({ to, subject, html }) => {
 //   try {
@@ -99,3 +98,59 @@ export const sendEmail = async ({
 //     throw err;
 //   }
 // };
+
+import nodemailer from 'nodemailer';
+
+console.log('EMAIL_USER defined?', !!process.env.EMAIL_USER);
+
+console.log('EMAIL_PASS defined?', !!process.env.EMAIL_PASS);
+
+const transporter = nodemailer.createTransport({
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true,
+
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
+
+/////////////////////////////////////////////////////
+// VERIFY SMTP
+/////////////////////////////////////////////////////
+
+transporter.verify((error) => {
+  if (error) {
+    console.error('❌ Nodemailer verification failed:', error.message);
+
+    return;
+  }
+
+  console.log('✅ Nodemailer ready');
+});
+
+/////////////////////////////////////////////////////
+// SEND EMAIL
+/////////////////////////////////////////////////////
+
+export const sendEmail = async ({ to, subject, html }) => {
+  try {
+    console.log(`📧 Attempting to send email to ${to}`);
+
+    const info = await transporter.sendMail({
+      from: `"HomeLoop" <${process.env.EMAIL_USER}>`,
+      to,
+      subject,
+      html,
+    });
+
+    console.log('✅ Email sent:', info.messageId);
+
+    return info;
+  } catch (error) {
+    console.error('❌ SEND EMAIL ERROR:', error);
+
+    throw error;
+  }
+};
