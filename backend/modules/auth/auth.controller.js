@@ -214,62 +214,160 @@ export const register = async (req, res) => {
       postalCode,
       country,
     } = req.body;
-    // Validate required fields
-    if (
-      !firstName ||
-      !lastName ||
-      !email ||
-      !password ||
-      !username ||
-      !address ||
-      !city ||
-      !state ||
-      !postalCode ||
-      !country
-    ) {
-      return res.status(400).json({ message: 'All fields are required' });
+
+    /////////////////////////////////////////////////////
+    // VALIDATE REQUIRED FIELDS
+    /////////////////////////////////////////////////////
+
+    const missingFields = [];
+
+    if (!firstName?.trim()) missingFields.push('firstName');
+    if (!lastName?.trim()) missingFields.push('lastName');
+    if (!email?.trim()) missingFields.push('email');
+    if (!password?.trim()) missingFields.push('password');
+    if (!username?.trim()) missingFields.push('username');
+    if (!address?.trim()) missingFields.push('address');
+    if (!city?.trim()) missingFields.push('city');
+    if (!country?.trim()) missingFields.push('country');
+
+    /////////////////////////////////////////////////////
+    // OPTIONAL FIELDS
+    /////////////////////////////////////////////////////
+
+    // Remove the comments below if you want them required
+
+     if (!state?.trim()) missingFields.push('state');
+    // if (!postalCode?.trim()) missingFields.push('postalCode');
+
+    if (missingFields.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields',
+        missingFields,
+      });
     }
 
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ message: 'User already exists' });
+    /////////////////////////////////////////////////////
+    // CHECK EXISTING EMAIL
+    /////////////////////////////////////////////////////
+
+    const existingEmail = await User.findOne({
+      email: email.toLowerCase().trim(),
+    });
+
+    if (existingEmail) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email already exists',
+      });
     }
+
+    /////////////////////////////////////////////////////
+    // CHECK EXISTING USERNAME
+    /////////////////////////////////////////////////////
+
+    const existingUsername = await User.findOne({
+      username: username.trim(),
+    });
+
+    if (existingUsername) {
+      return res.status(400).json({
+        success: false,
+        message: 'Username already exists',
+      });
+    }
+
+    /////////////////////////////////////////////////////
+    // CREATE EMAIL TOKEN
+    /////////////////////////////////////////////////////
 
     const emailToken = crypto.randomBytes(32).toString('hex');
 
+    /////////////////////////////////////////////////////
+    // CREATE USER
+    /////////////////////////////////////////////////////
+
     const user = await User.create({
-      firstName,
-      lastName,
-      email,
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      email: email.toLowerCase().trim(),
       password,
-      username,
-      address,
-      city,
-      state,
-      postalCode,
-      country,
+      username: username.trim(),
+
+      address: address.trim(),
+      city: city.trim(),
+      state: state?.trim() || '',
+      postalCode: postalCode?.trim() || '',
+      country: country.trim(),
+
       isEmailVerified: false,
+
       emailVerificationToken: crypto
         .createHash('sha256')
         .update(emailToken)
         .digest('hex'),
+
       emailVerificationExpire: Date.now() + 24 * 60 * 60 * 1000,
+
       loginHistory: [],
       refreshTokens: [],
     });
 
+    /////////////////////////////////////////////////////
+    // SEND VERIFICATION EMAIL
+    /////////////////////////////////////////////////////
+
     const verifyUrl = `${process.env.FRONTEND_URL}/verify-email/${emailToken}`;
+
     await queueEmail({
       to: user.email,
       subject: 'Verify your email',
-      html: `<h2>Email Verification</h2><p>Click below to verify your account:</p><a href="${verifyUrl}">Verify Email</a>`,
+      html: `
+        <div style="font-family: Arial, sans-serif;">
+          <h2>Email Verification</h2>
+
+          <p>
+            Thank you for registering. Click the button below to verify your account.
+          </p>
+
+          <a
+            href="${verifyUrl}"
+            style="
+              display:inline-block;
+              padding:12px 20px;
+              background:#2563eb;
+              color:#ffffff;
+              text-decoration:none;
+              border-radius:6px;
+              margin-top:10px;
+            "
+          >
+            Verify Email
+          </a>
+
+          <p style="margin-top:20px;">
+            If you did not create this account, you can safely ignore this email.
+          </p>
+        </div>
+      `,
     });
 
+    /////////////////////////////////////////////////////
+    // RESPONSE
+    /////////////////////////////////////////////////////
+
     res.status(201).json({
-      message: 'User created. Verification email sent.',
+      success: true,
+      message: 'User created successfully. Verification email sent.',
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('REGISTER ERROR:', err);
+
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined,
+    });
   }
 };
 
@@ -290,41 +388,92 @@ export const verifyEmail = async (req, res) => {
     });
 
     if (!user) {
-      return res.status(400).json({ message: 'Invalid or expired token' });
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired token',
+      });
     }
 
     user.isEmailVerified = true;
     user.emailVerificationToken = undefined;
     user.emailVerificationExpire = undefined;
+
     await user.save();
 
-    res.json({ message: 'Email verified successfully' });
+    res.json({
+      success: true,
+      message: 'Email verified successfully',
+    });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
   }
 };
 
 /////////////////////////////////////////////////////
-// LOGIN (WITH 2FA + SESSION TRACKING)
+// LOGIN
 /////////////////////////////////////////////////////
 
 export const login = async (req, res) => {
   try {
     const { email, password, twoFactorCode } = req.body;
 
-    const user = await User.findOne({ email }).select(
-      '+password +twoFactorSecret',
-    );
-    if (!user) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+    /////////////////////////////////////////////////////
+    // VALIDATE INPUTS
+    /////////////////////////////////////////////////////
+
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email and password are required',
+      });
     }
+
+    /////////////////////////////////////////////////////
+    // FIND USER
+    /////////////////////////////////////////////////////
+
+    const user = await User.findOne({
+      email: email.toLowerCase().trim(),
+    }).select('+password +twoFactorSecret');
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid credentials',
+      });
+    }
+
+    /////////////////////////////////////////////////////
+    // VERIFY PASSWORD
+    /////////////////////////////////////////////////////
 
     const isMatch = await user.comparePassword(password);
+
     if (!isMatch) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid credentials',
+      });
     }
 
-    // 2FA check
+    /////////////////////////////////////////////////////
+    // VERIFY EMAIL
+    /////////////////////////////////////////////////////
+
+    if (!user.isEmailVerified) {
+      return res.status(403).json({
+        success: false,
+        message: 'Please verify your email before logging in',
+      });
+    }
+
+    /////////////////////////////////////////////////////
+    // 2FA CHECK
+    /////////////////////////////////////////////////////
+
     if (user.twoFactorEnabled) {
       const verified = speakeasy.totp.verify({
         secret: user.twoFactorSecret,
@@ -332,22 +481,37 @@ export const login = async (req, res) => {
         token: twoFactorCode,
         window: 1,
       });
+
       if (!verified) {
-        return res.status(401).json({ message: 'Invalid 2FA code' });
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid 2FA code',
+        });
       }
     }
 
-    // Update login data
+    /////////////////////////////////////////////////////
+    // UPDATE LOGIN HISTORY
+    /////////////////////////////////////////////////////
+
     user.lastLogin = new Date();
+
     user.loginHistory.push({
       ip: req.ip,
       userAgent: req.headers['user-agent'],
       date: new Date(),
     });
 
-    // Create tokens
+    /////////////////////////////////////////////////////
+    // GENERATE TOKENS
+    /////////////////////////////////////////////////////
+
     const accessToken = signAccessToken(user);
     const refreshToken = signRefreshToken(user);
+
+    /////////////////////////////////////////////////////
+    // STORE SESSION
+    /////////////////////////////////////////////////////
 
     user.refreshTokens.push({
       token: refreshToken,
@@ -356,15 +520,20 @@ export const login = async (req, res) => {
       createdAt: new Date(),
       lastUsed: new Date(),
     });
+
     await user.save();
 
-    // Set cookies
+    /////////////////////////////////////////////////////
+    // SET COOKIES
+    /////////////////////////////////////////////////////
+
     res.cookie('accessToken', accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 15 * 60 * 1000,
     });
+
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -372,266 +541,38 @@ export const login = async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
+    /////////////////////////////////////////////////////
+    // RESPONSE
+    /////////////////////////////////////////////////////
+
     res.json({
+      success: true,
       message: 'Login successful',
+
       user: {
         id: user._id,
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
+        username: user.username,
         avatar: user.avatar,
+
         address: user.address,
         city: user.city,
         state: user.state,
         postalCode: user.postalCode,
         country: user.country,
+
         role: user.role,
         lastLogin: user.lastLogin,
       },
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
+    console.error('LOGIN ERROR:', err);
 
-/////////////////////////////////////////////////////
-// REFRESH TOKEN
-/////////////////////////////////////////////////////
-
-export const refreshToken = async (req, res) => {
-  try {
-    const token = req.cookies.refreshToken;
-    if (!token) return res.status(401).json({ message: 'No refresh token' });
-
-    const decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET);
-    const user = await User.findById(decoded.id);
-    if (!user) return res.status(403).json({ message: 'Invalid session' });
-
-    const session = user.refreshTokens.find((t) => t.token === token);
-    if (!session) {
-      user.refreshTokens = [];
-      await user.save();
-      return res
-        .status(403)
-        .json({ message: 'Session compromised. All sessions cleared.' });
-    }
-
-    // Rotate tokens
-    user.refreshTokens = user.refreshTokens.filter((t) => t.token !== token);
-    const newAccessToken = signAccessToken(user);
-    const newRefreshToken = signRefreshToken(user);
-    user.refreshTokens.push({
-      token: newRefreshToken,
-      device: req.headers['user-agent'],
-      ip: req.ip,
-      createdAt: new Date(),
-      lastUsed: new Date(),
+    res.status(500).json({
+      success: false,
+      message: err.message,
     });
-    await user.save();
-
-    res.cookie('accessToken', newAccessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 15 * 60 * 1000,
-    });
-    res.cookie('refreshToken', newRefreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
-
-    res.json({ message: 'Token refreshed' });
-  } catch (err) {
-    res.status(401).json({ message: 'Invalid refresh token' });
-  }
-};
-
-/////////////////////////////////////////////////////
-// GOOGLE AUTH
-/////////////////////////////////////////////////////
-
-export const googleAuth = async (req, res) => {
-  try {
-    const { email, firstName, lastName, googleId, avatar } = req.body;
-    let user = await User.findOne({ email });
-    if (!user) {
-      user = await User.create({
-        email,
-        firstName,
-        lastName,
-        googleId,
-        username: email.split('@')[0],
-        avatar: avatar || '',
-        isEmailVerified: true,
-        loginHistory: [],
-        refreshTokens: [],
-      });
-    }
-
-    const accessToken = signAccessToken(user);
-    const refreshToken = signRefreshToken(user);
-    user.refreshTokens.push({
-      token: refreshToken,
-      device: req.headers['user-agent'],
-      ip: req.ip,
-      createdAt: new Date(),
-      lastUsed: new Date(),
-    });
-    await user.save();
-
-    res.json({
-      message: 'Google login successful',
-      accessToken,
-      refreshToken,
-      user: {
-        id: user._id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        avatar: user.avatar,
-        address: user.address,
-        city: user.city,
-        state: user.state,
-        postalCode: user.postalCode,
-        country: user.country,
-        role: user.role,
-      },
-    });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
-
-/////////////////////////////////////////////////////
-// ENABLE 2FA
-/////////////////////////////////////////////////////
-
-export const enable2FA = async (req, res) => {
-  try {
-    const user = await User.findById(req.user.id).select('+twoFactorSecret');
-    const secret = speakeasy.generateSecret({
-      name: `YourApp (${user.email})`,
-    });
-    user.twoFactorSecret = secret.base32;
-    user.twoFactorEnabled = true;
-    await user.save();
-    const qr = await qrcode.toDataURL(secret.otpauth_url);
-    res.json({ qr, secret: secret.base32 });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
-
-/////////////////////////////////////////////////////
-// GET SESSIONS
-/////////////////////////////////////////////////////
-
-export const getSessions = async (req, res) => {
-  try {
-    const user = await User.findById(req.user.id);
-    res.json(user.refreshTokens);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
-
-/////////////////////////////////////////////////////
-// LOGOUT SINGLE SESSION
-/////////////////////////////////////////////////////
-
-export const logoutSession = async (req, res) => {
-  try {
-    const { token } = req.body;
-    await User.updateOne(
-      { _id: req.user.id },
-      { $pull: { refreshTokens: { token } } },
-    );
-    res.json({ message: 'Session removed' });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
-
-/////////////////////////////////////////////////////
-// LOGOUT CURRENT DEVICE
-/////////////////////////////////////////////////////
-
-export const logout = async (req, res) => {
-  try {
-    const token = req.cookies.refreshToken;
-    if (token) {
-      const user = await User.findOne({ 'refreshTokens.token': token });
-      if (user) {
-        user.refreshTokens = user.refreshTokens.filter(
-          (t) => t.token !== token,
-        );
-        await user.save();
-      }
-    }
-    res.clearCookie('accessToken');
-    res.clearCookie('refreshToken');
-    res.json({ message: 'Logged out successfully' });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
-
-/////////////////////////////////////////////////////
-// FORGOT PASSWORD
-/////////////////////////////////////////////////////
-
-export const forgotPassword = async (req, res) => {
-  try {
-    const user = await User.findOne({ email: req.body.email });
-    if (!user) return res.status(404).json({ message: 'User not found' });
-
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    user.resetPasswordToken = crypto
-      .createHash('sha256')
-      .update(resetToken)
-      .digest('hex');
-    user.resetPasswordExpire = Date.now() + 60 * 60 * 1000;
-    await user.save({ validateBeforeSave: false });
-
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
-    await queueEmail({
-      to: user.email,
-      subject: 'Password Reset',
-      html: `<a href="${resetUrl}">Reset Password</a>`,
-    });
-    res.json({ message: 'Password reset email sent' });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-/////////////////////////////////////////////////////
-// RESET PASSWORD
-/////////////////////////////////////////////////////
-
-export const resetPassword = async (req, res) => {
-  try {
-    const hashedToken = crypto
-      .createHash('sha256')
-      .update(req.params.token)
-      .digest('hex');
-    const user = await User.findOne({
-      resetPasswordToken: hashedToken,
-      resetPasswordExpire: { $gt: Date.now() },
-    });
-    if (!user)
-      return res.status(400).json({ message: 'Invalid or expired token' });
-
-    user.password = req.body.password;
-    user.resetPasswordToken = undefined;
-    user.resetPasswordExpire = undefined;
-    user.refreshToken = null; // invalidate sessions
-    await user.save();
-
-    res.json({ message: 'Password reset successful' });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
   }
 };
