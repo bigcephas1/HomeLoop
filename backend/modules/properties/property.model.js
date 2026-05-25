@@ -470,11 +470,13 @@ const propertySchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    
     moderationStatus: {
       type: String,
       enum: ['pending', 'approved', 'rejected', 'suspended'],
       default: 'pending',
     },
+    
     averageRating: {
       type: Number,
       default: 0,
@@ -493,6 +495,40 @@ const propertySchema = new mongoose.Schema(
       type: String,
       maxlength: 2000,
       default: '',
+    },
+
+    /////////////////////////////////////////////////////
+    // DOCUMENT VERIFICATION FOR PROPERTY OWNERSHIP (NEW)
+    /////////////////////////////////////////////////////
+
+    ownershipDocuments: [
+      {
+        type: {
+          type: String,
+          enum: ['deed', 'title', 'survey_plan', 'rental_agreement', 'other'],
+        },
+        url: String,
+        public_id: String,
+        uploadedAt: { type: Date, default: Date.now },
+      }
+    ],
+    
+    documentVerificationStatus: {
+      type: String,
+      enum: ['pending', 'verified', 'mismatch', 'rejected'],
+      default: 'pending',
+    },
+    
+    documentMatchScore: { 
+      type: Number, 
+      default: 0, 
+      min: 0, 
+      max: 100 
+    },
+    
+    documentVerificationNotes: { 
+      type: String, 
+      default: '' 
     },
   },
   {

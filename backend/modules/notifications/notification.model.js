@@ -31,7 +31,9 @@ const notificationSchema = new mongoose.Schema(
         'review',
         'moderation',
         'property',
+        'service',
         'chat',
+        'inspection',
         'system',
       ],
       default: 'system',
@@ -46,16 +48,18 @@ const notificationSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+
+    metadata: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
   },
   {
     timestamps: true,
   },
 );
 
-notificationSchema.index({
-  user: 1,
-  createdAt: -1,
-});
+notificationSchema.index({ user: 1, createdAt: -1 });
 
 const Notification = mongoose.model('Notification', notificationSchema);
 

@@ -3,14 +3,62 @@
 import Notification from './notification.model.js';
 
 /////////////////////////////////////////////////////
-// GET MY NOTIFICATIONS
+// HELPER: CREATE NOTIFICATION
+/////////////////////////////////////////////////////
+
+export const createNotification = async (userId, title, message, type, link = null, metadata = {}) => {
+  try {
+    const notification = await Notification.create({
+      user: userId,
+      title,
+      message,
+      type,
+      link: link || '',
+      metadata,
+    });
+    return notification;
+  } catch (error) {
+    console.error('Error creating notification:', error);
+    return null;
+  }
+};
+
+/////////////////////////////////////////////////////
+// HELPER: CREATE BULK NOTIFICATIONS
+/////////////////////////////////////////////////////
+
+export const createBulkNotifications = async (userIds, title, message, type, link = null) => {
+  try {
+    const notifications = userIds.map(userId => ({
+      user: userId,
+      title,
+      message,
+      type,
+      link: link || '',
+    }));
+    const result = await Notification.insertMany(notifications);
+    return result;
+  } catch (error) {
+    console.error('Error creating bulk notifications:', error);
+    return [];
+  }
+};
+
+/////////////////////////////////////////////////////
+// GET MY NOTIFICATIONS (Works for ALL users including admin)
 /////////////////////////////////////////////////////
 
 export const getMyNotifications = async (req, res) => {
   try {
-    const notifications = await Notification.find({
-      user: req.user._id,
-    }).sort({
+    const filter = { user: req.user._id };
+    
+    // Regular users should NOT see system notifications
+    // Admins CAN see system notifications (for monitoring)
+    if (req.user.role !== 'admin') {
+      filter.type = { $ne: 'system' };
+    }
+    
+    const notifications = await Notification.find(filter).sort({
       createdAt: -1,
     });
 
@@ -22,6 +70,27 @@ export const getMyNotifications = async (req, res) => {
     res.status(500).json({
       message: error.message,
     });
+  }
+};
+
+/////////////////////////////////////////////////////
+// GET UNREAD COUNT (Works for ALL users)
+/////////////////////////////////////////////////////
+
+export const getUnreadCount = async (req, res) => {
+  try {
+    const filter = { user: req.user._id, isRead: false };
+    
+    // Regular users should not count system notifications
+    if (req.user.role !== 'admin') {
+      filter.type = { $ne: 'system' };
+    }
+    
+    const count = await Notification.countDocuments(filter);
+    
+    res.status(200).json({ count });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -46,7 +115,6 @@ export const markNotificationRead = async (req, res) => {
     }
 
     notification.isRead = true;
-
     await notification.save();
 
     res.status(200).json({
@@ -66,15 +134,13 @@ export const markNotificationRead = async (req, res) => {
 
 export const markAllNotificationsRead = async (req, res) => {
   try {
-    await Notification.updateMany(
-      {
-        user: req.user._id,
-        isRead: false,
-      },
-      {
-        isRead: true,
-      },
-    );
+    const filter = { user: req.user._id, isRead: false };
+    
+    if (req.user.role !== 'admin') {
+      filter.type = { $ne: 'system' };
+    }
+    
+    await Notification.updateMany(filter, { isRead: true });
 
     res.status(200).json({
       message: 'All notifications marked as read',

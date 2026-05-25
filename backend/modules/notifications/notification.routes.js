@@ -1,11 +1,10 @@
 // src/modules/notifications/notification.routes.js
 
 import express from 'express';
-
 import protect from '../../middleware/auth.middleware.js';
-
 import {
   getMyNotifications,
+  getUnreadCount,
   markNotificationRead,
   markAllNotificationsRead,
   deleteNotification,
@@ -13,28 +12,22 @@ import {
 
 const router = express.Router();
 
-/////////////////////////////////////////////////////
-// GET MY NOTIFICATIONS
-/////////////////////////////////////////////////////
+// All routes require authentication
+router.use(protect);
 
-router.get('/', protect, getMyNotifications);
+// GET /api/notifications - Get my notifications (works for all users)
+router.get('/', getMyNotifications);
 
-/////////////////////////////////////////////////////
-// MARK ONE AS READ
-/////////////////////////////////////////////////////
+// GET /api/notifications/unread-count - Get unread count for badge (works for all users)
+router.get('/unread-count', getUnreadCount);
 
-router.patch('/:id/read', protect, markNotificationRead);
+// PATCH /api/notifications/read-all - Mark all as read
+router.patch('/read-all', markAllNotificationsRead);
 
-/////////////////////////////////////////////////////
-// MARK ALL AS READ
-/////////////////////////////////////////////////////
+// PATCH /api/notifications/:id/read - Mark single as read
+router.patch('/:id/read', markNotificationRead);
 
-router.patch('/read-all', protect, markAllNotificationsRead);
-
-/////////////////////////////////////////////////////
-// DELETE
-/////////////////////////////////////////////////////
-
-router.delete('/:id', protect, deleteNotification);
+// DELETE /api/notifications/:id - Delete notification
+router.delete('/:id', deleteNotification);
 
 export default router;

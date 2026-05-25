@@ -2,10 +2,12 @@ import Property from './property.model.js';
 import PropertyVisit from './propertyVisit.model.js';
 import ModerationLog from '../moderation/moderationLog.model.js';
 import sendNotification from '../../services/notification.service.js';
+import ProviderProfile from '../providerProfiles/providerProfile.model.js';
 
 import { queueEmail } from '../../services/emailQueue.service.js';
 
 import propertyApprovedTemplate from '../../templates/propertyApprovedTemplate.js';
+
 /////////////////////////////////////////////////////
 // SANITIZE NUMBER HELPER
 /////////////////////////////////////////////////////
@@ -19,23 +21,73 @@ const sanitizeNumber = (value) => {
 // CREATE PROPERTY
 /////////////////////////////////////////////////////
 
+
+
+
 export const createProperty = async (req, res) => {
   try {
+    // Check landlord verification - STRICT CHECK
+    const providerProfile = await ProviderProfile.findOne({
+      user: req.user._id,
+    });
+
+    if (!providerProfile) {
+      return res.status(403).json({
+        message: 'You must create a landlord profile first',
+        action: 'create_profile',
+      });
+    }
+
+    if (!providerProfile.isVerified || providerProfile.verificationStatus !== 'approved') {
+      return res.status(403).json({
+        message: 'Your landlord profile must be verified by admin before listing properties',
+        status: providerProfile.verificationStatus,
+        action: 'wait_verification',
+      });
+    }
+
+    if (providerProfile.isSuspended) {
+      return res.status(403).json({
+        message: 'Your account has been suspended. Contact admin for details.',
+        action: 'contact_admin',
+      });
+    }
+
+    // Create property with pending moderation
     const property = await Property.create({
       ...req.body,
       landlord: req.user._id,
+      moderationStatus: 'pending',
+      documentVerificationStatus: 'pending',
+    });
+
+    // Notify admin
+    await Notification.create({
+      user: 'admin_system',
+      title: 'New Property Pending Review',
+      message: `${req.user.firstName} ${req.user.lastName} has submitted a property for review: ${property.title}`,
+      type: 'moderation',
+      link: `/admin/properties/${property._id}`,
+    });
+
+    // Notify landlord
+    await Notification.create({
+      user: req.user._id,
+      title: 'Property Submitted for Review',
+      message: 'Your property has been submitted for admin review. You will be notified once approved.',
+      type: 'moderation',
     });
 
     res.status(201).json({
-      message: 'Property created successfully',
+      message: 'Property submitted for admin review',
       property,
     });
   } catch (error) {
-    res.status(500).json({
-      message: error.message,
-    });
+    res.status(500).json({ message: error.message });
   }
 };
+
+
 
 /////////////////////////////////////////////////////
 // GET ALL PROPERTIES
@@ -334,14 +386,12 @@ export const getNearbyProperties = async (req, res) => {
           spherical: true,
         },
       },
-
       {
         $match: {
           isDeleted: false,
           isPublished: true,
         },
       },
-
       {
         $sort: {
           distance: 1,
@@ -366,7 +416,13 @@ export const getNearbyProperties = async (req, res) => {
 
 export const getAllPropertiesAdmin = async (req, res) => {
   try {
-    const { page = 1, limit = 20, status, isDeleted, landlord } = req.query;
+    const {
+      page = 1,
+      limit = 20,
+      status,
+      isDeleted,
+      landlord,
+    } = req.query;
 
     const query = {};
 
@@ -432,13 +488,9 @@ export const approveProperty = async (req, res) => {
     }
 
     property.moderationStatus = 'approved';
-
     property.isPublished = true;
-
     property.isVerified = true;
-
     property.verifiedBy = req.user._id;
-
     property.verificationDate = new Date();
 
     await property.save();
@@ -449,11 +501,8 @@ export const approveProperty = async (req, res) => {
 
     await ModerationLog.create({
       property: property._id,
-
       admin: req.user._id,
-
       action: 'approved',
-
       reason: req.body.reason || '',
     });
 
@@ -463,13 +512,9 @@ export const approveProperty = async (req, res) => {
 
     await sendNotification({
       user: property.landlord._id,
-
       title: 'Property Approved',
-
       message: 'Your property has been approved successfully',
-
       type: 'property',
-
       link: `/properties/${property._id}`,
     });
 
@@ -479,19 +524,15 @@ export const approveProperty = async (req, res) => {
 
     await queueEmail({
       to: property.landlord.email,
-
       subject: 'Property Approved',
-
       html: propertyApprovedTemplate({
         name: property.landlord.name,
-
         propertyTitle: property.title,
       }),
     });
 
     res.status(200).json({
       message: 'Property approved successfully',
-
       property,
     });
   } catch (error) {

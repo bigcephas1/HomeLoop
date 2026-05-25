@@ -1,221 +1,300 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import toast from 'react-hot-toast';
-import api from '@/lib/api';
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
+import toast from "react-hot-toast";
+import api from "@/lib/api";
+import Input from "@/components/Input";
+import Button from "@/components/Button";
 
 export default function RegisterPage() {
-  const [form, setForm] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    username: '',
-    password: '',
-    confirmPassword: '',
-    address: '',
-    city: '',
-    state: '',
-    postalCode: '',
-    country: 'Nigeria',
+  const router = useRouter();
+  const { user, loading } = useAuth();
+  const [submitting, setSubmitting] = useState(false);
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (!loading && user) {
+      const role = user.role;
+      const roleRoutes = {
+        admin: "/admin/dashboard",
+        landlord: "/dashboard/landlord",
+        service_provider: "/dashboard/service-provider",
+        representative: "/dashboard/representative",
+        client: "/dashboard/user",
+      };
+      router.push(roleRoutes[role] || "/dashboard/user");
+    }
+  }, [user, loading, router]);
+
+  const [formData, setFormData] = useState({
+    role: "client",
+    firstName: "",
+    lastName: "",
+    username: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+    address: "",
+    city: "",
+    state: "",
+    country: "Nigeria",
+    postalCode: "",
   });
 
-  const [loading, setLoading] = useState(false);
-
-  const router = useRouter();
-
-  /////////////////////////////////////////////////////
-  // HANDLE INPUT CHANGE
-  /////////////////////////////////////////////////////
-
   const handleChange = (e) => {
-    setForm({
-      ...form,
+    setFormData((prev) => ({
+      ...prev,
       [e.target.name]: e.target.value,
-    });
+    }));
   };
 
-  /////////////////////////////////////////////////////
-  // HANDLE SUBMIT
-  /////////////////////////////////////////////////////
-
-  const handleSubmit = async (e) => {
+  const handleRegister = async (e) => {
     e.preventDefault();
 
-    /////////////////////////////////////////////////////
-    // PASSWORD VALIDATION
-    /////////////////////////////////////////////////////
-
-    if (form.password !== form.confirmPassword) {
-      return toast.error('Passwords do not match');
+    // Validation
+    if (!formData.firstName.trim()) {
+      return toast.error("First name is required");
     }
-
-    /////////////////////////////////////////////////////
-    // PASSWORD LENGTH
-    /////////////////////////////////////////////////////
-
-    if (form.password.length < 8) {
-      return toast.error('Password must be at least 8 characters long');
+    if (!formData.lastName.trim()) {
+      return toast.error("Last name is required");
+    }
+    if (!formData.username.trim()) {
+      return toast.error("Username is required");
+    }
+    if (!formData.email.trim()) {
+      return toast.error("Email is required");
+    }
+    if (!formData.password) {
+      return toast.error("Password is required");
+    }
+    if (!formData.confirmPassword) {
+      return toast.error("Please confirm your password");
+    }
+    if (formData.password !== formData.confirmPassword) {
+      return toast.error("Passwords do not match");
+    }
+    if (formData.password.length < 6) {
+      return toast.error("Password must be at least 6 characters");
+    }
+    if (!formData.address.trim()) {
+      return toast.error("Address is required");
+    }
+    if (!formData.city.trim()) {
+      return toast.error("City is required");
+    }
+    if (!formData.state.trim()) {
+      return toast.error("State is required");
+    }
+    if (!formData.country) {
+      return toast.error("Country is required");
     }
 
     try {
-      setLoading(true);
+      setSubmitting(true);
 
-      /////////////////////////////////////////////////////
-      // SEND TO BACKEND
-      /////////////////////////////////////////////////////
+      const payload = {
+        role: formData.role,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        username: formData.username,
+        email: formData.email,
+        password: formData.password,
+        confirmPassword: formData.confirmPassword,
+        address: formData.address,
+        city: formData.city,
+        state: formData.state,
+        country: formData.country,
+        postalCode: formData.postalCode,
+      };
 
-      await api.post('/auth/register', {
-        firstName: form.firstName,
-        lastName: form.lastName,
-        email: form.email,
-        username: form.username,
-        password: form.password,
-        confirmPassword: form.confirmPassword,
+      console.log("Sending payload:", payload);
 
-        address: form.address,
-        city: form.city,
-        state: form.state,
-        postalCode: form.postalCode,
-        country: form.country,
-      });
+      const response = await api.post("/auth/register", payload);
+      console.log("Registration response:", response.data);
 
-      toast.success('Registration successful! Please verify your email.');
-
-      router.push('/login');
+      toast.success("Registration successful! Please check your email to verify your account.");
+      
+      setTimeout(() => {
+        router.push("/login");
+      }, 3000);
+      
     } catch (err) {
-      console.error(err);
-
-      toast.error(err.response?.data?.message || 'Registration failed');
+      console.error("Registration error:", err);
+      const errorMessage = err.response?.data?.message || 
+                          err.response?.data?.error || 
+                          "Registration failed. Please check all fields.";
+      toast.error(errorMessage);
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">Loading...</div>
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-2xl mx-auto mt-10 p-6 bg-white shadow rounded">
-      <h1 className="text-2xl font-bold mb-6">Create an Account</h1>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <input
+    <div className="min-h-screen flex items-center justify-center px-6 py-24">
+      <div className="w-full max-w-2xl rounded-3xl p-10 border border-black/10 dark:border-white/10 bg-white dark:bg-black">
+        <h1 className="text-5xl font-bold mb-2">Create Account</h1>
+        <p className="text-gray-400 mb-10">Join Homeloop today</p>
+        
+        <form onSubmit={handleRegister} className="grid md:grid-cols-2 gap-5">
+          {/* ROLE */}
+          <div className="md:col-span-2">
+            <label className="text-sm text-gray-600 dark:text-gray-400 mb-2 block">
+              Select Role <span className="text-red-500">*</span>
+            </label>
+            <select
+              name="role"
+              value={formData.role}
+              onChange={handleChange}
+              className="w-full px-4 py-4 rounded-2xl border border-black/10 dark:border-white/10 bg-white dark:bg-white/5 text-black dark:text-white"
+              required
+            >
+              <option value="client">Client</option>
+              <option value="landlord">Landlord</option>
+              <option value="service_provider">Service Provider</option>
+              <option value="representative">Representative</option>
+            </select>
+          </div>
+
+          <Input
+            label="First Name *"
             name="firstName"
-            placeholder="First Name"
-            value={form.firstName}
+            placeholder="Peter"
+            value={formData.firstName}
             onChange={handleChange}
             required
-            className="p-2 border rounded"
           />
 
-          <input
+          <Input
+            label="Last Name *"
             name="lastName"
-            placeholder="Last Name"
-            value={form.lastName}
+            placeholder="Ukpabi"
+            value={formData.lastName}
             onChange={handleChange}
             required
-            className="p-2 border rounded"
           />
-        </div>
 
-        <input
-          name="email"
-          type="email"
-          placeholder="Email"
-          value={form.email}
-          onChange={handleChange}
-          required
-          className="w-full p-2 border rounded"
-        />
+          <Input
+            label="Username *"
+            name="username"
+            placeholder="peter"
+            value={formData.username}
+            onChange={handleChange}
+            required
+          />
 
-        <input
-          name="username"
-          placeholder="Username"
-          value={form.username}
-          onChange={handleChange}
-          required
-          className="w-full p-2 border rounded"
-        />
+          <Input
+            label="Email *"
+            type="email"
+            name="email"
+            placeholder="you@example.com"
+            value={formData.email}
+            onChange={handleChange}
+            required
+          />
 
-        <input
-          name="password"
-          type="password"
-          placeholder="Password"
-          value={form.password}
-          onChange={handleChange}
-          required
-          className="w-full p-2 border rounded"
-        />
+          <Input
+            label="Password *"
+            type="password"
+            name="password"
+            placeholder="******** (min 6 characters)"
+            value={formData.password}
+            onChange={handleChange}
+            required
+          />
 
-        <input
-          name="confirmPassword"
-          type="password"
-          placeholder="Confirm Password"
-          value={form.confirmPassword}
-          onChange={handleChange}
-          required
-          className="w-full p-2 border rounded"
-        />
+          <Input
+            label="Confirm Password *"
+            type="password"
+            name="confirmPassword"
+            placeholder="********"
+            value={formData.confirmPassword}
+            onChange={handleChange}
+            required
+          />
 
-        <input
-          name="address"
-          placeholder="Street Address"
-          value={form.address}
-          onChange={handleChange}
-	  required
-          className="w-full p-2 border rounded"
-        />
+          <Input
+            label="Address *"
+            name="address"
+            placeholder="Your street address"
+            value={formData.address}
+            onChange={handleChange}
+            className="md:col-span-2"
+            required
+          />
 
-        <div className="grid grid-cols-2 gap-4">
-          <input
+          <Input
+            label="City *"
             name="city"
-            placeholder="City"
-            value={form.city}
+            placeholder="Kumbotso"
+            value={formData.city}
             onChange={handleChange}
-	    required
-            className="p-2 border rounded"
+            required
           />
 
-          <input
+          <Input
+            label="State *"
             name="state"
-            placeholder="State"
-            value={form.state}
+            placeholder="Kano"
+            value={formData.state}
             onChange={handleChange}
-	    required
-            className="p-2 border rounded"
+            required
           />
-        </div>
 
-        <input
-          name="postalCode"
-          placeholder="Postal Code (Optional)"
-          value={form.postalCode}
-          onChange={handleChange}
-          className="w-full p-2 border rounded"
-        />
+          <div>
+            <label className="text-sm text-gray-600 dark:text-gray-400 mb-2 block">
+              Country <span className="text-red-500">*</span>
+            </label>
+            <select
+              name="country"
+              value={formData.country}
+              onChange={handleChange}
+              className="w-full px-4 py-4 rounded-2xl border border-black/10 dark:border-white/10 bg-white dark:bg-white/5 text-black dark:text-white"
+              required
+            >
+              <option value="">Select Country</option>
+              <option value="Nigeria">Nigeria</option>
+              <option value="Ghana">Ghana</option>
+              <option value="Kenya">Kenya</option>
+              <option value="South Africa">South Africa</option>
+              <option value="Egypt">Egypt</option>
+            </select>
+          </div>
 
-        <input
-          name="country"
-          placeholder="Country"
-          value={form.country}
-          onChange={handleChange}
-          className="w-full p-2 border rounded"
-        />
+          <Input
+            label="Postal Code"
+            name="postalCode"
+            placeholder="700001"
+            value={formData.postalCode}
+            onChange={handleChange}
+          />
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:opacity-50"
-        >
-          {loading ? 'Creating Account...' : 'Register'}
-        </button>
-      </form>
+          <div className="md:col-span-2">
+            <Button type="submit" disabled={submitting} className="w-full">
+              {submitting ? "Creating account..." : "Create Account"}
+            </Button>
+          </div>
+        </form>
 
-      <p className="mt-4 text-center">
-        Already have an account?{' '}
-        <Link href="/login" className="text-blue-600">
-          Sign In
-        </Link>
-      </p>
+        <p className="text-gray-500 text-sm mt-6 text-center">
+          Already have an account?
+          <span
+            onClick={() => router.push("/login")}
+            className="text-black dark:text-white cursor-pointer ml-2 hover:underline"
+          >
+            Sign In
+          </span>
+        </p>
+      </div>
     </div>
   );
 }

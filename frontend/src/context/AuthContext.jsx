@@ -1,44 +1,49 @@
-'use client';
-import { createContext, useContext, useState, useEffect } from 'react';
-import api from '@/lib/api';
+"use client";
+
+import { createContext, useContext, useState, useEffect } from "react";
+import api from "@/lib/api";
 
 const AuthContext = createContext();
 
-export const AuthProvider = ({ children }) => {
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuth must be used within AuthProvider");
+  }
+  return context;
+};
+
+export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchUser = async () => {
-    try {
-      const res = await api.get('/users/me');
-      setUser(res.data);
-    } catch (err) {
-      setUser(null);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const login = async (email, password) => {
-    const res = await api.post('/auth/login', { email, password });
-    if (res.data.user) setUser(res.data.user);
-    return res.data;
-  };
-
-  const logout = async () => {
-    await api.post('/auth/logout');
-    setUser(null);
-  };
-
+  // Check for existing user in localStorage on mount
   useEffect(() => {
-    fetchUser();
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (e) {
+        console.error("Error parsing stored user", e);
+      }
+    }
+    setLoading(false);
   }, []);
 
+  const login = (userData) => {
+    setUser(userData);
+    localStorage.setItem("user", JSON.stringify(userData));
+  };
+
+  const logout = () => {
+    setUser(null);
+    localStorage.removeItem("user");
+    window.location.href = "/admin/login";
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, fetchUser }}>
+    <AuthContext.Provider value={{ user, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
-};
-
-export const useAuth = () => useContext(AuthContext);
+}
