@@ -34,6 +34,7 @@ export default function RegisterPage() {
     lastName: "",
     username: "",
     email: "",
+    phoneNumber: "",
     password: "",
     confirmPassword: "",
     address: "",
@@ -65,6 +66,9 @@ export default function RegisterPage() {
     }
     if (!formData.email.trim()) {
       return toast.error("Email is required");
+    }
+    if (!formData.phoneNumber.trim()) {
+      return toast.error("Phone number is required");
     }
     if (!formData.password) {
       return toast.error("Password is required");
@@ -100,6 +104,7 @@ export default function RegisterPage() {
         lastName: formData.lastName,
         username: formData.username,
         email: formData.email,
+        phoneNumber: formData.phoneNumber,
         password: formData.password,
         confirmPassword: formData.confirmPassword,
         address: formData.address,
@@ -198,6 +203,16 @@ export default function RegisterPage() {
             name="email"
             placeholder="you@example.com"
             value={formData.email}
+            onChange={handleChange}
+            required
+          />
+
+          <Input
+            label="Phone Number *"
+            name="phoneNumber"
+            type="tel"
+            placeholder="+234 800 000 0000"
+            value={formData.phoneNumber}
             onChange={handleChange}
             required
           />

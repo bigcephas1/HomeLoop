@@ -236,6 +236,7 @@ export const register = async (req, res) => {
       state,
       postalCode,
       country,
+      phoneNumber,
     } = req.body;
 
     
@@ -260,6 +261,7 @@ if (role && allowedRoles.includes(role)) {
     if (!city?.trim()) missingFields.push('city');
     if (!state?.trim()) missingFields.push('state');
     if (!country?.trim()) missingFields.push('country');
+    if (!phoneNumber?.trim()) missingFields.push('phoneNumber');
 
     if (missingFields.length > 0) {
       return res.status(400).json({

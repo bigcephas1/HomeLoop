@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
 
-export default function PropertiesPage() {
+// Create a separate component that uses useSearchParams
+function PropertiesContent() {
   const { user } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -75,7 +76,6 @@ export default function PropertiesPage() {
     setPagination({ ...pagination, page: 1 });
   };
 
-  // Get the dashboard link based on user role
   const getDashboardLink = () => {
     if (!user) return "/login";
     const role = user.role;
@@ -260,5 +260,23 @@ export default function PropertiesPage() {
         )}
       </div>
     </div>
+  );
+}
+
+// Loading fallback for Suspense
+function PropertiesLoading() {
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8 flex items-center justify-center">
+      <div className="text-center">Loading properties...</div>
+    </div>
+  );
+}
+
+// Main export with Suspense boundary
+export default function PropertiesPage() {
+  return (
+    <Suspense fallback={<PropertiesLoading />}>
+      <PropertiesContent />
+    </Suspense>
   );
 }
